@@ -1,3 +1,55 @@
+# --- Auto-detect ROS edition & distro (put this at the very top) ---
+
+# Default unset
+unset(ROS_EDITION CACHE)
+unset(HUMBLE_ROS CACHE)
+
+# 1) Prefer explicit env hint: ROS_VERSION = 1 or 2
+if(DEFINED ENV{ROS_VERSION})
+  if("$ENV{ROS_VERSION}" STREQUAL "2")
+    set(ROS_EDITION "ROS2")
+  elseif("$ENV{ROS_VERSION}" STREQUAL "1")
+    set(ROS_EDITION "ROS1")
+  endif()
+endif()
+
+# 2) If still unknown, probe the buildsystem by QUIET find_package
+if(NOT DEFINED ROS_EDITION)
+  find_package(ament_cmake QUIET)
+  if(ament_cmake_FOUND)
+    set(ROS_EDITION "ROS2")
+  else()
+    find_package(catkin QUIET)
+    if(catkin_FOUND)
+      set(ROS_EDITION "ROS1")
+    endif()
+  endif()
+endif()
+
+if(NOT DEFINED ROS_EDITION)
+  message(FATAL_ERROR "Failed to auto-detect ROS edition (ROS1/ROS2). "
+                      "Ensure your environment is sourced.")
+endif()
+
+# 3) Record ROS distro name (e.g., 'humble', 'foxy', 'iron', 'jazzy'...)
+set(ROS_DISTRO_NAME "$ENV{ROS_DISTRO}")
+
+# Keep your original variable semantics:
+#   HUMBLE_ROS == "humble"  <=> running on ROS 2 Humble.
+if(ROS_EDITION STREQUAL "ROS2")
+  if(ROS_DISTRO_NAME STREQUAL "humble")
+    set(HUMBLE_ROS "humble")
+  else()
+    set(HUMBLE_ROS "")
+  endif()
+else()
+  set(HUMBLE_ROS "")
+endif()
+
+message(STATUS "Auto-detected ROS_EDITION=${ROS_EDITION}, ROS_DISTRO=${ROS_DISTRO_NAME}, "
+               "HUMBLE_ROS='${HUMBLE_ROS}'")
+
+
 # judge which cmake codes to use 
 if(ROS_EDITION STREQUAL "ROS1")
 
