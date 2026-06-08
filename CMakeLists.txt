@@ -49,6 +49,29 @@ endif()
 message(STATUS "Auto-detected ROS_EDITION=${ROS_EDITION}, ROS_DISTRO=${ROS_DISTRO_NAME}, "
                "HUMBLE_ROS='${HUMBLE_ROS}'")
 
+set(LIVOX_SDK2_ARCHIVE "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/Livox-SDK2-1.3.1.tar.gz")
+set(LIVOX_SDK2_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/Livox-SDK2-1.3.1")
+set(LIVOX_SDK2_INCLUDE_DIR "${LIVOX_SDK2_SOURCE_DIR}/include")
+
+if(NOT EXISTS "${LIVOX_SDK2_ARCHIVE}")
+  message(FATAL_ERROR "Missing Livox SDK archive: ${LIVOX_SDK2_ARCHIVE}")
+endif()
+
+if(NOT EXISTS "${LIVOX_SDK2_SOURCE_DIR}/sdk_core/CMakeLists.txt")
+  execute_process(
+    COMMAND ${CMAKE_COMMAND} -E tar xzf "${LIVOX_SDK2_ARCHIVE}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty"
+    RESULT_VARIABLE LIVOX_SDK2_EXTRACT_RESULT
+  )
+  if(NOT LIVOX_SDK2_EXTRACT_RESULT EQUAL 0)
+    message(FATAL_ERROR "Failed to extract ${LIVOX_SDK2_ARCHIVE}")
+  endif()
+endif()
+
+if(NOT EXISTS "${LIVOX_SDK2_SOURCE_DIR}/sdk_core/CMakeLists.txt")
+  message(FATAL_ERROR "Extracted Livox SDK2 is incomplete: ${LIVOX_SDK2_SOURCE_DIR}")
+endif()
+
 
 # judge which cmake codes to use 
 if(ROS_EDITION STREQUAL "ROS1")
@@ -142,8 +165,11 @@ if(ROS_EDITION STREQUAL "ROS1")
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
   set(CMAKE_CXX_EXTENSIONS OFF)
 
-  ## make sure the livox_lidar_sdk_static library is installed
-  find_library(LIVOX_LIDAR_SDK_LIBRARY  liblivox_lidar_sdk_static.a    /usr/local/lib)
+  add_subdirectory(
+    "${LIVOX_SDK2_SOURCE_DIR}/sdk_core"
+    "${CMAKE_CURRENT_BINARY_DIR}/livox_sdk2_sdk_core"
+  )
+  set_target_properties(livox_lidar_sdk_static PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
   ## PCL library
   link_directories(${PCL_LIBRARY_DIRS})
@@ -201,6 +227,7 @@ if(ROS_EDITION STREQUAL "ROS1")
     ${catkin_INCLUDE_DIRS}
     ${PCL_INCLUDE_DIRS}
     ${APR_INCLUDE_DIRS}
+    ${LIVOX_SDK2_INCLUDE_DIR}
     3rdparty
     src
   )
@@ -209,7 +236,7 @@ if(ROS_EDITION STREQUAL "ROS1")
   # link libraries
   #---------------------------------------------------------------------------------------
   target_link_libraries(${PROJECT_NAME}_node
-    ${LIVOX_LIDAR_SDK_LIBRARY}
+    livox_lidar_sdk_static
     ${Boost_LIBRARY}
     ${catkin_LIBRARIES}
     ${PCL_LIBRARIES}
@@ -297,13 +324,11 @@ else(ROS_EDITION STREQUAL "ROS2")
     LIBRARY_NAME ${PROJECT_NAME}
   )
 
-  ## make sure the livox_lidar_sdk_shared library is installed
-  find_library(LIVOX_LIDAR_SDK_LIBRARY liblivox_lidar_sdk_shared.so /usr/local/lib REQUIRED)
-
-  ##
-  find_path(LIVOX_LIDAR_SDK_INCLUDE_DIR
-    NAMES "livox_lidar_api.h" "livox_lidar_def.h"
-    REQUIRED)
+  add_subdirectory(
+    "${LIVOX_SDK2_SOURCE_DIR}/sdk_core"
+    "${CMAKE_CURRENT_BINARY_DIR}/livox_sdk2_sdk_core"
+  )
+  set_target_properties(livox_lidar_sdk_static PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
   ## PCL library
   link_directories(${PCL_LIBRARY_DIRS})
@@ -331,8 +356,6 @@ else(ROS_EDITION STREQUAL "ROS2")
     src/call_back/livox_lidar_callback.cpp
   )
 
-  target_include_directories(${PROJECT_NAME} PRIVATE ${livox_sdk_INCLUDE_DIRS})
-
   # get include directories of custom msg headers
   if(HUMBLE_ROS STREQUAL "humble")
     rosidl_get_typesupport_target(cpp_typesupport_target
@@ -348,7 +371,7 @@ else(ROS_EDITION STREQUAL "ROS2")
   target_include_directories(${PROJECT_NAME} PUBLIC
     ${PCL_INCLUDE_DIRS}
     ${APR_INCLUDE_DIRS}
-    ${LIVOX_LIDAR_SDK_INCLUDE_DIR}
+    ${LIVOX_SDK2_INCLUDE_DIR}
     ${LIVOX_INTERFACES_INCLUDE_DIRECTORIES}   # for custom msgs
     3rdparty
     src
@@ -356,7 +379,7 @@ else(ROS_EDITION STREQUAL "ROS2")
 
   # link libraries
   target_link_libraries(${PROJECT_NAME}
-    ${LIVOX_LIDAR_SDK_LIBRARY}
+    livox_lidar_sdk_static
     ${LIVOX_INTERFACE_TARGET}   # for custom msgs
     ${PPT_LIBRARY}
     ${Boost_LIBRARY}
